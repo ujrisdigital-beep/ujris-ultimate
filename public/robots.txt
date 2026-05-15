@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+Sitemap: https://ujris.org/sitemap.xml
+Sitemap: https://ujris.net/sitemap.xml
+Sitemap: https://ujris.co.uk/sitemap.xml

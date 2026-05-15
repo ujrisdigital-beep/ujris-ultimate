@@ -1,0 +1,18 @@
+{
+  "name": "UJRIS Justice Intelligence",
+  "short_name": "UJRIS",
+  "description": "AI-Powered Legal Tools for Self-Represented Litigants",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D1B2A",
+  "theme_color": "#D4AF37",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/ujris-3d-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["legal", "tools", "ai"]
+}
