@@ -1,0 +1,13 @@
+.env.local
+.env
+.env*.local
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.vercel
+prisma/migrations/
+*.log
+.DS_Store
+Thumbs.db
+public/icons/icon-*.png

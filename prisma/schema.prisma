@@ -1,0 +1,494 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  INDIVIDUAL
+  AGENCY_MEMBER
+  AGENCY_ADMIN
+  PLATFORM_ADMIN
+}
+
+enum AccountStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum AgencyType {
+  CITIZENS_ADVICE
+  CHARITY
+  LAW_FIRM
+  TRADE_UNION
+  OTHER
+}
+
+enum AgencyStatus {
+  PENDING
+  VERIFIED
+  SUSPENDED
+}
+
+enum CaseStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  CLOSED
+  ARCHIVED
+}
+
+enum CaseCategory {
+  EMPLOYMENT
+  HOUSING
+  BENEFITS
+  FAMILY
+  IMMIGRATION
+  CRIMINAL
+  CIVIL
+  CONSUMER
+  OTHER
+}
+
+enum TokenType {
+  AGENCY_INVITE       // individual → agency
+  COURT_ORDER_ACCESS  // court order → law enforcement
+}
+
+enum TokenPermission {
+  READ_ONLY
+  READ_WRITE
+}
+
+enum CourtOrderStatus {
+  SUBMITTED
+  AI_REVIEWING
+  AI_APPROVED
+  AI_REJECTED
+  AWAITING_HUMAN
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum EvidenceType {
+  DOCUMENT
+  IMAGE
+  AUDIO
+  VIDEO
+  EMAIL
+  OTHER
+}
+
+enum AuditAction {
+  CASE_CREATED
+  CASE_UPDATED
+  CASE_STATUS_CHANGED
+  EVIDENCE_UPLOADED
+  EVIDENCE_VIEWED
+  EVIDENCE_DELETED
+  TOKEN_GENERATED
+  TOKEN_ACCEPTED
+  TOKEN_REVOKED
+  TOKEN_EXPIRED
+  AGENCY_VIEWED_CASE
+  AGENCY_COMMENTED
+  AGENCY_UPLOADED_EVIDENCE
+  COURT_ORDER_SUBMITTED
+  COURT_ORDER_APPROVED
+  COURT_ORDER_REJECTED
+  COURT_ORDER_ACCESS_GRANTED
+  COURT_ORDER_ACCESS_USED
+  AI_RESPONSE_GENERATED
+  FEEDBACK_SUBMITTED
+  USER_LOGIN
+  USER_LOGOUT
+  ADMIN_ACTION
+  DATA_EXPORT
+  SOFT_DELETE
+  HARD_DELETE_REQUESTED
+}
+
+// ─────────────────────────────────────────────
+// CORE USERS
+// ─────────────────────────────────────────────
+
+model User {
+  id                String        @id @default(cuid())
+  email             String        @unique
+  emailVerified     DateTime?
+  name              String?
+  image             String?
+  role              UserRole      @default(INDIVIDUAL)
+  status            AccountStatus @default(PENDING_VERIFICATION)
+  preferredLang     String        @default("en")
+  preferredJurisdiction String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  // NextAuth relations
+  accounts          Account[]
+  sessions          Session[]
+
+  // Platform relations
+  cases             Case[]
+  agencyMembership  AgencyMember?
+  tokensGenerated   CaseAccessToken[] @relation("TokenGenerator")
+  auditLogs         AuditLog[]        @relation("AuditActor")
+  feedback          Feedback[]
+  notifications     Notification[]
+  courtOrderRequests CourtOrderRequest[] @relation("CourtOrderRequester")
+
+  @@index([email])
+  @@index([role])
+  @@index([deletedAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────
+// AGENCIES
+// ─────────────────────────────────────────────
+
+model Agency {
+  id             String       @id @default(cuid())
+  name           String
+  type           AgencyType
+  status         AgencyStatus @default(PENDING)
+  registrationNo String?
+  domain         String?      @unique
+  website        String?
+  description    String?      @db.Text
+  verifiedAt     DateTime?
+  verifiedBy     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  members        AgencyMember[]
+  caseTokens     CaseAccessToken[]
+  auditLogs      AuditLog[]    @relation("AuditAgency")
+
+  @@index([status])
+  @@index([domain])
+}
+
+model AgencyMember {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  agencyId  String
+  isAdmin   Boolean  @default(false)
+  joinedAt  DateTime @default(now())
+  removedAt DateTime?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@index([agencyId])
+}
+
+// ─────────────────────────────────────────────
+// CASES
+// ─────────────────────────────────────────────
+
+model Case {
+  id           String       @id @default(cuid())
+  userId       String
+  title        String
+  description  String?      @db.Text
+  category     CaseCategory @default(OTHER)
+  status       CaseStatus   @default(DRAFT)
+  jurisdiction String       @default("GB")
+  language     String       @default("en")
+  isConfidential Boolean    @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+  closedAt     DateTime?
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  evidence     Evidence[]
+  tokens       CaseAccessToken[]
+  messages     CaseMessage[]
+  auditLogs    AuditLog[]        @relation("AuditCase")
+  feedback     Feedback[]
+  aiSessions   AISession[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([jurisdiction])
+  @@index([deletedAt])
+}
+
+// ─────────────────────────────────────────────
+// EVIDENCE
+// ─────────────────────────────────────────────
+
+model Evidence {
+  id           String       @id @default(cuid())
+  caseId       String
+  uploadedBy   String
+  fileName     String
+  originalName String
+  mimeType     String
+  fileSize     Int
+  storageKey   String       @unique
+  type         EvidenceType @default(DOCUMENT)
+  description  String?
+  sha256Hash   String
+  uploadedAt   DateTime     @default(now())
+  deletedAt    DateTime?
+
+  case         Case   @relation(fields: [caseId], references: [id], onDelete: Restrict)
+
+  @@index([caseId])
+  @@index([deletedAt])
+}
+
+// ─────────────────────────────────────────────
+// CASE ACCESS TOKENS (Agency + Court Order)
+// ─────────────────────────────────────────────
+
+model CaseAccessToken {
+  id            String          @id @default(cuid())
+  caseId        String
+  generatedBy   String
+  agencyId      String?
+  type          TokenType       @default(AGENCY_INVITE)
+  permission    TokenPermission @default(READ_ONLY)
+  token         String          @unique @default(cuid())
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+  acceptedBy    String?
+  revokedAt     DateTime?
+  revokedBy     String?
+  isActive      Boolean         @default(true)
+  courtOrderId  String?         @unique
+  createdAt     DateTime        @default(now())
+
+  case          Case    @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  generator     User    @relation("TokenGenerator", fields: [generatedBy], references: [id])
+  agency        Agency? @relation(fields: [agencyId], references: [id])
+  courtOrder    CourtOrderRequest? @relation(fields: [courtOrderId], references: [id])
+
+  @@index([caseId])
+  @@index([token])
+  @@index([agencyId])
+  @@index([isActive])
+}
+
+// ─────────────────────────────────────────────
+// COURT ORDER REQUESTS
+// ─────────────────────────────────────────────
+
+model CourtOrderRequest {
+  id                String           @id @default(cuid())
+  requestedBy       String
+  targetCaseId      String?
+  targetUserId      String?
+  orderPdfKey       String
+  orderReference    String
+  issuingCourt      String
+  jurisdiction      String
+  status            CourtOrderStatus @default(SUBMITTED)
+  aiReviewScore     Float?
+  aiReviewNotes     String?          @db.Text
+  aiReviewedAt      DateTime?
+  humanReviewedBy   String?
+  humanReviewedAt   DateTime?
+  humanReviewNotes  String?          @db.Text
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  rejectionReason   String?          @db.Text
+  accessExpiresAt   DateTime?
+  createdAt         DateTime         @default(now())
+
+  requester         User             @relation("CourtOrderRequester", fields: [requestedBy], references: [id])
+  accessToken       CaseAccessToken?
+
+  @@index([status])
+  @@index([targetCaseId])
+}
+
+// ─────────────────────────────────────────────
+// MESSAGES (Individual ↔ Agency encrypted chat)
+// ─────────────────────────────────────────────
+
+model CaseMessage {
+  id          String   @id @default(cuid())
+  caseId      String
+  senderId    String
+  senderRole  String
+  content     String   @db.Text
+  encrypted   Boolean  @default(true)
+  sentAt      DateTime @default(now())
+  deletedAt   DateTime?
+
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Restrict)
+
+  @@index([caseId])
+  @@index([sentAt])
+}
+
+// ─────────────────────────────────────────────
+// IMMUTABLE AUDIT LOG (blockchain-style hash chain)
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  sequenceNo  Int         @unique @default(autoincrement())
+  action      AuditAction
+  actorId     String?
+  actorEmail  String?
+  actorRole   String?
+  agencyId    String?
+  caseId      String?
+  resourceId  String?
+  resourceType String?
+  details     Json?
+  ipAddress   String?
+  userAgent   String?
+  prevHash    String
+  entryHash   String      @unique
+  createdAt   DateTime    @default(now())
+
+  actor       User?       @relation("AuditActor", fields: [actorId], references: [id])
+  agency      Agency?     @relation("AuditAgency", fields: [agencyId], references: [id])
+  case        Case?       @relation("AuditCase", fields: [caseId], references: [id])
+
+  @@index([actorId])
+  @@index([caseId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// AI SESSIONS & SELF-IMPROVEMENT FEEDBACK
+// ─────────────────────────────────────────────
+
+model AISession {
+  id              String   @id @default(cuid())
+  caseId          String
+  userId          String
+  jurisdiction    String
+  language        String   @default("en")
+  messages        Json
+  confidenceScore Float?
+  createdAt       DateTime @default(now())
+
+  case            Case     @relation(fields: [caseId], references: [id])
+  feedback        Feedback[]
+
+  @@index([caseId])
+  @@index([jurisdiction])
+}
+
+model Feedback {
+  id              String   @id @default(cuid())
+  userId          String
+  caseId          String?
+  aiSessionId     String?
+  jurisdiction    String
+  category        String
+  originalOutput  String   @db.Text
+  correction      String?  @db.Text
+  score           Int      // 1-5 rating
+  wasHelpful      Boolean
+  lawyerVerified  Boolean  @default(false)
+  courtOutcome    String?
+  createdAt       DateTime @default(now())
+
+  user            User       @relation(fields: [userId], references: [id])
+  case            Case?      @relation(fields: [caseId], references: [id])
+  aiSession       AISession? @relation(fields: [aiSessionId], references: [id])
+
+  @@index([jurisdiction])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model JurisdictionModel {
+  id               String   @id @default(cuid())
+  jurisdiction     String   @unique
+  category         String
+  accuracyScore    Float    @default(0)
+  totalFeedbacks   Int      @default(0)
+  lastImprovedAt   DateTime @default(now())
+  improvementNotes String?  @db.Text
+  updatedAt        DateTime @updatedAt
+
+  @@index([jurisdiction])
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String   @db.Text
+  type      String
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+}
+
+// ─────────────────────────────────────────────
+// TEMP EMAIL BLOCKLIST
+// ─────────────────────────────────────────────
+
+model BlockedEmailDomain {
+  domain    String   @id
+  reason    String?
+  addedAt   DateTime @default(now())
+}
