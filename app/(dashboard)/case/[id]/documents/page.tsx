@@ -6,13 +6,14 @@ import DocumentsClient from "@/components/cases/DocumentsClient";
 
 export const metadata = { title: "Evidence Vault" };
 
-export default async function DocumentsPage({ params }: { params: { id: string } }) {
+export default async function DocumentsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
   const userId = (session.user as any).id;
   const cas = await db.case.findFirst({
-    where:   { id: params.id, userId, deletedAt: null },
+    where:   { id, userId, deletedAt: null },
     include: { evidence: { where: { deletedAt: null }, orderBy: { uploadedAt: "desc" } } },
   });
   if (!cas) notFound();
