@@ -40,7 +40,8 @@
            border border-red-500/30 hover:bg-red-600/30 transition-all duration-200 active:scale-95;
   }
   .card {
-    @apply bg-[#152438] border border-white/8 rounded-xl p-6;
+    @apply bg-[#152438] rounded-xl p-6;
+    border: 1px solid rgba(255,255,255,0.08);
   }
   .card-hover {
     @apply card hover:border-[#C9A84C]/40 hover:shadow-lg hover:shadow-[#C9A84C]/5 transition-all duration-200;
