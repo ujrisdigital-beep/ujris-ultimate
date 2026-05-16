@@ -1,3 +1,5 @@
+"use client";
+
 export default function OfflinePage() {
   return (
     <div className="min-h-screen bg-[#0D1B2A] flex items-center justify-center p-6">
@@ -7,8 +9,9 @@ export default function OfflinePage() {
         <p className="text-[#7A8FA6] mb-6">
           UJRIS requires an internet connection for AI features and document uploads. Your existing case data is still accessible.
         </p>
-        <button onClick={() => window.location.reload()}
-          className="btn-primary">Try again</button>
+        <button onClick={() => window.location.reload()} className="btn-primary">
+          Try again
+        </button>
       </div>
     </div>
   );
