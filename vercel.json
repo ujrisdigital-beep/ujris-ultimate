@@ -1,6 +1,29 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "framework": "nextjs",
+  "buildCommand": "prisma generate && next build",
   "installCommand": "npm install",
-  "framework": null
+  "functions": {
+    "app/api/upload/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/ai/route.ts": {
+      "maxDuration": 120
+    },
+    "app/api/research/route.ts": {
+      "maxDuration": 120
+    },
+    "app/api/sue/route.ts": {
+      "maxDuration": 120
+    }
+  },
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    }
+  ]
 }

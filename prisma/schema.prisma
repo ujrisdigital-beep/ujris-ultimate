@@ -256,6 +256,7 @@ model Case {
   auditLogs    AuditLog[]        @relation("AuditCase")
   feedback     Feedback[]
   aiSessions   AISession[]
+  deadlines    Deadline[]
 
   @@index([userId])
   @@index([status])
@@ -391,8 +392,8 @@ model AuditLog {
   details     Json?
   ipAddress   String?
   userAgent   String?
-  prevHash    String
-  entryHash   String      @unique
+  prevHash    String      @default("")
+  entryHash   String      @unique @default(cuid())
   createdAt   DateTime    @default(now())
 
   actor       User?       @relation("AuditActor", fields: [actorId], references: [id])
@@ -461,6 +462,24 @@ model JurisdictionModel {
   updatedAt        DateTime @updatedAt
 
   @@index([jurisdiction])
+}
+
+// ─────────────────────────────────────────────
+// DEADLINES
+// ─────────────────────────────────────────────
+
+model Deadline {
+  id        String   @id @default(cuid())
+  caseId    String
+  title     String
+  dueDate   DateTime
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([dueDate])
 }
 
 // ─────────────────────────────────────────────
