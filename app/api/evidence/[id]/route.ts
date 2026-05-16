@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { supabaseAdmin, BUCKET } from "@/lib/supabase";
+import { getSupabaseAdmin, BUCKET } from "@/lib/supabase";
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,7 +16,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!ev) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (ev.storageKey) {
-    await supabaseAdmin.storage.from(BUCKET).remove([ev.storageKey]).catch(() => null);
+    await getSupabaseAdmin().storage.from(BUCKET).remove([ev.storageKey]).catch(() => null);
   }
 
   await db.evidence.update({ where: { id }, data: { deletedAt: new Date() } });

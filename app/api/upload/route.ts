@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { supabaseAdmin, BUCKET } from "@/lib/supabase";
+import { getSupabaseAdmin, BUCKET } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
@@ -35,7 +35,8 @@ export async function POST(req: NextRequest) {
     ? `evidence/${caseId}/${uid}/chunk_${chunkIdx}`
     : `evidence/${caseId}/${uid}/${file.name}`;
 
-  const { error: uploadError } = await supabaseAdmin.storage.from(BUCKET).upload(chunkPath, bytes, {
+  const admin = getSupabaseAdmin();
+  const { error: uploadError } = await admin.storage.from(BUCKET).upload(chunkPath, bytes, {
     upsert:      true,
     contentType: file.type || "application/octet-stream",
   });
@@ -49,11 +50,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "chunk_received", chunk: chunkIdx });
   }
 
-  const { data: urlData } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(chunkPath);
+  const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(chunkPath);
 
-  // Simple hex hash from first 1KB for dedup
-  const hashBuf  = await crypto.subtle.digest("SHA-256", bytes.slice(0, 1024));
-  const hashHex  = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  const hashBuf = await crypto.subtle.digest("SHA-256", bytes.slice(0, 1024));
+  const hashHex = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
 
   const evidence = await db.evidence.create({
     data: {
@@ -70,13 +70,7 @@ export async function POST(req: NextRequest) {
   });
 
   await db.auditLog.create({
-    data: {
-      action:       "EVIDENCE_UPLOADED",
-      actorId:      userId,
-      caseId,
-      resourceId:   evidence.id,
-      resourceType: "evidence",
-    },
+    data: { action: "EVIDENCE_UPLOADED", actorId: userId, caseId, resourceId: evidence.id, resourceType: "evidence" },
   }).catch(() => null);
 
   return NextResponse.json({ evidence, url: urlData.publicUrl }, { status: 201 });
